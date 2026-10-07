@@ -1,0 +1,25 @@
+# Medical RAG Assistant - dependencies
+# Recommended: Python 3.11 or 3.12 (very new Python versions may not be
+# supported yet by chromadb / torch)
+#
+# Install with:  pip install -r requirements.txt
+
+# --- UI ---
+streamlit
+
+# --- Config ---
+python-dotenv
+
+# --- PDF loading ---
+pymupdf
+
+# --- LangChain ---
+langchain-core
+langchain-text-splitters
+langchain-chroma
+langchain-huggingface
+langchain-google-genai
+
+# --- Vector database + embeddings ---
+chromadb
+sentence-transformers
