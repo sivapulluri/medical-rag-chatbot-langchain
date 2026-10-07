@@ -40,7 +40,9 @@ Question ──► (translate if Telugu script) ──► query expansion
 | Prompt template | `src/prompt_template.py` |
 | Gemini LLM + image analysis | `src/gemini_llm.py` |
 | RAG pipeline | `src/rag_chain.py` |
-| Streamlit web app | `src/app.py` |
+| FastAPI backend (REST API) | `src/api.py` |
+| Streamlit frontend (calls the API) | `src/app.py` |
+| API tests | `tests/test_api.py` |
 
 ---
 
@@ -52,15 +54,19 @@ medical_rag/
 ├── .env.example
 ├── .gitignore
 ├── requirements.txt
+├── requirements-dev.txt  # pytest + httpx for the tests
 ├── README.md
 ├── data/
 │   └── medical_pdfs/     # put your PDF files here
 ├── vectorstore/
 │   └── chroma_db/        # created by vector_store.py
+├── tests/
+│   └── test_api.py
 └── src/
     ├── __init__.py
     ├── config.py
-    ├── app.py
+    ├── api.py            # FastAPI backend
+    ├── app.py            # Streamlit frontend
     ├── rag_chain.py
     ├── retriever.py
     ├── embeddings.py
@@ -116,13 +122,48 @@ Put your medical PDF files in `data/medical_pdfs/`.
 python src/vector_store.py
 ```
 
-**6. Run the app**
+**6. Start the backend** (terminal 1, from the project root)
+
+```bash
+uvicorn api:app --reload --app-dir src
+```
+
+API docs (Swagger UI): http://127.0.0.1:8000/docs
+
+**7. Start the frontend** (terminal 2, same virtual environment)
 
 ```bash
 streamlit run src/app.py
 ```
 
-Open http://localhost:8501.
+Open http://localhost:8501. To point the UI at another backend URL, set the `API_URL` environment variable.
+
+---
+
+## 🔌 REST API
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/health` | Server status and whether the RAG chain is loaded |
+| `POST` | `/ask` | JSON `{"question": "..."}` → `{"answer": "..."}` |
+| `POST` | `/analyze-image` | Multipart form: `image` (PNG/JPEG, max 5 MB) + optional `question` → `{"answer": "..."}` |
+
+Example:
+
+```bash
+curl -X POST http://127.0.0.1:8000/ask \
+  -H "Content-Type: application/json" \
+  -d '{"question": "hypertension lakshanalu enti?"}'
+```
+
+Status codes: `422` invalid input, `415` unsupported image type, `413` image too large, `503` RAG not ready, `500` internal error.
+
+Run the API tests (they use fakes, so no Gemini key or vector store is needed):
+
+```bash
+pip install -r requirements-dev.txt
+pytest
+```
 
 ---
 
@@ -198,7 +239,7 @@ If you change the embedding model or chunk settings, **rebuild the vector store*
 
 ## 🛠️ Tech stack
 
-Python · LangChain · ChromaDB · sentence-transformers · Google Gemini · PyMuPDF · Streamlit
+Python · FastAPI · LangChain · ChromaDB · sentence-transformers · Google Gemini · PyMuPDF · Streamlit · pytest
 
 ---
 

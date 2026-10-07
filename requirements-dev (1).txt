@@ -1,11 +1,16 @@
 # Medical RAG Assistant - dependencies
-# Recommended: Python 3.11 or 3.12 (very new Python versions may not be
-# supported yet by chromadb / torch)
+# Recommended: Python 3.11 or 3.12
 #
 # Install with:  pip install -r requirements.txt
 
-# --- UI ---
+# --- Backend API ---
+fastapi
+uvicorn[standard]
+python-multipart
+
+# --- Frontend UI ---
 streamlit
+requests
 
 # --- Config ---
 python-dotenv

@@ -1,17 +1,17 @@
-import base64
-import sys
-from pathlib import Path
+"""Streamlit frontend. It does NOT run the RAG pipeline itself:
+it calls the FastAPI backend (src/api.py) over HTTP.
 
-SRC_DIR = Path(__file__).resolve().parent
-PROJECT_ROOT = SRC_DIR.parent
+Start the backend first:   uvicorn api:app --reload --app-dir src
+Then start this UI:        streamlit run src/app.py
+"""
 
-sys.path.insert(0, str(SRC_DIR))
-sys.path.insert(0, str(PROJECT_ROOT))
+import os
 
+import requests
 import streamlit as st
 
-from gemini_llm import analyze_medical_image
-from rag_chain import create_rag_chain
+API_URL = os.getenv("API_URL", "http://127.0.0.1:8000").rstrip("/")
+TIMEOUT_SECONDS = 180  # first request can be slow
 
 
 # -----------------------------------
@@ -33,20 +33,83 @@ st.caption(
 
 
 # -----------------------------------
-# LOAD RAG CHAIN (once)
+# BACKEND HELPERS
 # -----------------------------------
 
-@st.cache_resource
-def load_rag_chain():
-    return create_rag_chain()
+def backend_status():
+    """Return (online, rag_ready)."""
+    try:
+        response = requests.get(f"{API_URL}/health", timeout=3)
+        data = response.json()
+        return True, bool(data.get("rag_ready"))
+    except Exception:
+        return False, False
 
 
-try:
-    rag_chain = load_rag_chain()
+def error_message(response):
+    """Readable error text from a failed API response."""
+    try:
+        return response.json().get("detail", response.text)
+    except ValueError:
+        return response.text
 
-except Exception as e:
-    st.error("Failed to load Medical RAG system.")
-    st.exception(e)
+
+def ask_backend(question):
+    response = requests.post(
+        f"{API_URL}/ask",
+        json={"question": question},
+        timeout=TIMEOUT_SECONDS,
+    )
+
+    if response.status_code != 200:
+        raise RuntimeError(error_message(response))
+
+    return response.json()["answer"]
+
+
+def analyze_image_backend(uploaded_image, question):
+    response = requests.post(
+        f"{API_URL}/analyze-image",
+        files={
+            "image": (
+                uploaded_image.name,
+                uploaded_image.getvalue(),
+                uploaded_image.type or "image/jpeg",
+            )
+        },
+        data={"question": question},
+        timeout=TIMEOUT_SECONDS,
+    )
+
+    if response.status_code != 200:
+        raise RuntimeError(error_message(response))
+
+    return response.json()["answer"]
+
+
+# -----------------------------------
+# SIDEBAR: BACKEND STATUS
+# -----------------------------------
+
+online, ready = backend_status()
+
+with st.sidebar:
+    st.subheader("Backend")
+
+    if online and ready:
+        st.success("Online")
+    elif online:
+        st.warning("Starting up...")
+    else:
+        st.error("Offline")
+
+    st.caption(f"API: {API_URL}")
+
+if not online:
+    st.error(
+        "Cannot reach the backend. Start it in another terminal:\n\n"
+        "`uvicorn api:app --reload --app-dir src`"
+    )
     st.stop()
 
 
@@ -87,29 +150,17 @@ if st.button("Ask"):
         with st.spinner("Analyzing medical image..."):
 
             try:
-                image_bytes = uploaded_image.getvalue()
-
-                image_base64 = base64.b64encode(image_bytes).decode("utf-8")
-
-                # png / jpeg - use the real type of the upload
-                mime_type = uploaded_image.type or "image/jpeg"
-
-                image_question = question.strip() or (
-                    "Please explain this medical image in simple language."
-                )
-
-                answer = analyze_medical_image(
-                    image_base64,
-                    image_question,
-                    mime_type,
-                )
+                answer = analyze_image_backend(uploaded_image, question.strip())
 
                 st.subheader("🩺 Medical Image Explanation")
                 st.write(answer)
 
-            except Exception as e:
-                st.error("Unable to analyze the medical image.")
+            except requests.exceptions.RequestException as e:
+                st.error("Could not reach the backend.")
                 st.exception(e)
+
+            except Exception as e:
+                st.error(f"Unable to analyze the medical image: {e}")
 
     # Text question -> RAG
     else:
@@ -119,11 +170,14 @@ if st.button("Ask"):
         ):
 
             try:
-                answer = rag_chain(question)
+                answer = ask_backend(question.strip())
 
                 st.subheader("🩺 Answer")
                 st.write(answer)
 
-            except Exception as e:
-                st.error("Unable to generate an answer.")
+            except requests.exceptions.RequestException as e:
+                st.error("Could not reach the backend.")
                 st.exception(e)
+
+            except Exception as e:
+                st.error(f"Unable to generate an answer: {e}")
