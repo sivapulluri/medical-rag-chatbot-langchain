@@ -17,6 +17,18 @@ import api
 client = TestClient(api.app)
 
 
+def test_frontend_is_served():
+    response = client.get("/")
+    assert response.status_code == 200
+    assert "Carefully" in response.text
+
+
+def test_frontend_assets_are_served():
+    for asset in ("styles.css", "app.js"):
+        response = client.get(f"/static/{asset}")
+        assert response.status_code == 200
+
+
 def test_health_reports_not_ready_without_chain(monkeypatch):
     monkeypatch.setattr(api, "state", {})
     response = client.get("/health")

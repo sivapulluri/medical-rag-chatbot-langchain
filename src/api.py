@@ -14,10 +14,13 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 SRC_DIR = Path(__file__).resolve().parent
+STATIC_DIR = SRC_DIR / "static"
 sys.path.insert(0, str(SRC_DIR))
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from gemini_llm import analyze_medical_image
@@ -60,6 +63,15 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+
+@app.get("/", include_in_schema=False)
+def frontend():
+    """Serve the browser-based chat interface."""
+    return FileResponse(STATIC_DIR / "index.html")
+
 
 # Allow browser-based frontends (React etc.) to call the API.
 # Restrict allow_origins to your real frontend URL in production.

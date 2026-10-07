@@ -41,7 +41,8 @@ Question ──► (translate if Telugu script) ──► query expansion
 | Gemini LLM + image analysis | `src/gemini_llm.py` |
 | RAG pipeline | `src/rag_chain.py` |
 | FastAPI backend (REST API) | `src/api.py` |
-| Streamlit frontend (calls the API) | `src/app.py` |
+| HTML/CSS/JavaScript web frontend | `src/static/` |
+| Optional Streamlit frontend (calls the API) | `src/app.py` |
 | API tests | `tests/test_api.py` |
 
 ---
@@ -66,7 +67,8 @@ medical_rag/
     ├── __init__.py
     ├── config.py
     ├── api.py            # FastAPI backend
-    ├── app.py            # Streamlit frontend
+    ├── app.py            # Optional Streamlit frontend
+    ├── static/           # HTML, CSS and JavaScript web frontend
     ├── rag_chain.py
     ├── retriever.py
     ├── embeddings.py
@@ -130,13 +132,17 @@ uvicorn api:app --reload --app-dir src
 
 API docs (Swagger UI): http://127.0.0.1:8000/docs
 
-**7. Start the frontend** (terminal 2, same virtual environment)
+**7. Open the web frontend**
+
+Visit http://127.0.0.1:8000 in your browser. The FastAPI server hosts the HTML/CSS/JavaScript chat UI, including image upload and backend status.
+
+Alternatively, start the Streamlit UI in a second terminal:
 
 ```bash
 streamlit run src/app.py
 ```
 
-Open http://localhost:8501. To point the UI at another backend URL, set the `API_URL` environment variable.
+Open http://localhost:8501. To point the Streamlit UI at another backend URL, set the `API_URL` environment variable.
 
 ---
 
