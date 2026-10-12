@@ -1,30 +1,12 @@
-# Medical RAG Assistant - dependencies
-# Recommended: Python 3.11 or 3.12
-#
-# Install with:  pip install -r requirements.txt
-
-# --- Backend API ---
 fastapi
 uvicorn[standard]
 python-multipart
-
-# --- Frontend UI ---
 streamlit
 requests
-
-# --- Config ---
 python-dotenv
-
-# --- PDF loading ---
 pymupdf
-
-# --- LangChain ---
 langchain-core
 langchain-text-splitters
 langchain-chroma
-langchain-huggingface
 langchain-google-genai
-
-# --- Vector database + embeddings ---
 chromadb
-sentence-transformers
