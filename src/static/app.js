@@ -182,7 +182,17 @@ form.addEventListener("submit", async (event) => {
         body: JSON.stringify({ question }),
       });
     }
-    const data = await response.json();
+
+    let data;
+    try {
+      data = await response.json();
+    } catch {
+      if (response.status === 504 || response.status === 502) {
+        throw new Error("The request timed out. The assistant may still be loading — please try again in a moment.");
+      }
+      throw new Error(`The server returned an unexpected response (${response.status}). Please try again.`);
+    }
+
     if (!response.ok) throw new Error(data.detail || "The request could not be completed.");
     pendingBubble.replaceChildren();
     pendingBubble.textContent = data.answer;

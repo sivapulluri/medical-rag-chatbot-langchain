@@ -35,6 +35,7 @@ def get_llm():
         model=model_name,
         google_api_key=api_key,
         temperature=0.2,   # low = more stable medical answers
+        timeout=25,        # fail before Render's 30 s proxy timeout
     )
 
     print(f"Gemini LLM loaded successfully! ({model_name})")
