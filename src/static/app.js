@@ -65,7 +65,8 @@ async function checkBackend() {
   try {
     const response = await fetch("/health");
     if (!response.ok) throw new Error(`Health check failed (${response.status}).`);
-    const data = await response.json();
+    const text = await response.text();
+    const data = text ? JSON.parse(text) : {};
     if (data.rag_ready) {
       setBackendStatus("ready", "Assistant ready");
     } else {
@@ -183,17 +184,27 @@ form.addEventListener("submit", async (event) => {
       });
     }
 
-    let data;
+    let data = {};
     try {
-      data = await response.json();
-    } catch {
-      if (response.status === 504 || response.status === 502) {
-        throw new Error("The request timed out. The assistant may still be loading — please try again in a moment.");
+      const text = await response.text();
+      if (text && text.trim()) {
+        data = JSON.parse(text);
       }
-      throw new Error(`The server returned an unexpected response (${response.status}). Please try again.`);
+    } catch {
+      data = {};
     }
 
-    if (!response.ok) throw new Error(data.detail || "The request could not be completed.");
+    if (!response.ok) {
+      if (response.status === 502 || response.status === 503 || response.status === 504) {
+        throw new Error("The server is waking up or busy. Please wait a moment and try again.");
+      }
+      throw new Error(data.detail || `Server returned error (${response.status}). Please try again.`);
+    }
+
+    if (!data.answer) {
+      throw new Error("No answer was returned. Please try again.");
+    }
+
     pendingBubble.replaceChildren();
     pendingBubble.textContent = data.answer;
     scrollToLatest();

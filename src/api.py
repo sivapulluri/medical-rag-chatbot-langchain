@@ -45,8 +45,7 @@ state = {}
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Initialize the Gemini chain. The local embedding model loads on the
-    # first retrieval, while the vector store is prepared separately.
+    VECTORSTORE_PATH.mkdir(parents=True, exist_ok=True)
     logger.info("Loading RAG chain...")
     state["rag_chain"] = create_rag_chain()
     logger.info("RAG chain ready.")
@@ -65,6 +64,16 @@ app = FastAPI(
 )
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+
+@app.middleware("http")
+async def add_no_cache_headers(request, call_next):
+    response = await call_next(request)
+    if request.url.path.startswith("/static") or request.url.path == "/":
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+    return response
 
 
 @app.get("/", include_in_schema=False)

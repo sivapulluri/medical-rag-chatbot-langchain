@@ -3,36 +3,40 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from embeddings import LocalEmbeddings
+from embeddings import GeminiEmbeddings, normalize
 
 
-def test_local_embeddings_use_cached_fastembed_model(monkeypatch, tmp_path):
-    class FakeVector:
-        def __init__(self, values):
-            self.values = values
+def test_normalize():
+    vec = [3.0, 4.0]
+    norm = normalize(vec)
+    assert abs(norm[0] - 0.6) < 1e-5
+    assert abs(norm[1] - 0.8) < 1e-5
+    assert normalize([0.0, 0.0]) == [0.0, 0.0]
 
-        def tolist(self):
-            return self.values
 
-    class FakeTextEmbedding:
-        def __init__(self, **kwargs):
-            self.options = kwargs
+def test_gemini_embeddings_wrapper(monkeypatch):
+    class FakeGoogleEmbeddings:
+        def __init__(self, model, google_api_key, output_dimensionality):
+            self.model = model
+            self.api_key = google_api_key
+            self.dims = output_dimensionality
 
-        def embed(self, texts):
-            return (FakeVector([float(len(text)), 1.0]) for text in texts)
+        def embed_documents(self, texts):
+            return [[3.0, 4.0] for _ in texts]
 
-    monkeypatch.setattr("embeddings.TextEmbedding", FakeTextEmbedding)
-    cache_path = tmp_path / "model-cache"
-    embeddings = LocalEmbeddings("test-model", cache_path)
+        def embed_query(self, text):
+            return [3.0, 4.0]
 
-    assert embeddings.embed_documents(["one", "three"]) == [
-        [3.0, 1.0],
-        [5.0, 1.0],
-    ]
-    assert embeddings.embed_query("query") == [5.0, 1.0]
-    assert embeddings._client.options == {
-        "model_name": "test-model",
-        "cache_dir": str(cache_path),
-        "threads": 2,
-    }
-    assert cache_path.is_dir()
+    monkeypatch.setenv("GEMINI_API_KEY", "fake-key")
+    monkeypatch.setattr("embeddings.GoogleGenerativeAIEmbeddings", FakeGoogleEmbeddings)
+
+    emb = GeminiEmbeddings("test-model", 768)
+    docs = emb.embed_documents(["hello", "world"])
+    assert len(docs) == 2
+    assert abs(docs[0][0] - 0.6) < 1e-5
+
+    q = emb.embed_query("test query")
+    assert abs(q[0] - 0.6) < 1e-5
+    # Query caching
+    assert "test query" in emb._query_cache
+

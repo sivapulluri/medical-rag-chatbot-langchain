@@ -60,7 +60,15 @@ def create_rag_chain():
         documents = retrieve_documents(question, search_question)
 
         if not documents:
-            return NOT_FOUND_MESSAGE
+            fallback_prompt = (
+                "You are a medical information assistant.\n\n"
+                "Answer the user's health question clearly and accurately in simple language.\n"
+                "Remind the user that this provides general medical information, not personal medical advice or a diagnosis.\n"
+                "If the question is in Telugu script or Tenglish, respond in that style.\n\n"
+                f"USER QUESTION: {question}\n\nANSWER:"
+            )
+            response = llm.invoke(fallback_prompt)
+            return clean_response(response)
 
         # 3. Build the prompt
         formatted_prompt = prompt.invoke(

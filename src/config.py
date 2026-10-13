@@ -41,15 +41,11 @@ def _get_project_path(name: str, default: Path) -> Path:
 
 
 # -------------------------------------------------------------------
-# Local multilingual embeddings (FastEmbed / ONNX Runtime)
+# Gemini API embeddings (lightweight, zero RAM overhead)
 # -------------------------------------------------------------------
-# Changing the embedding model requires rebuilding the vector store.
-DEFAULT_EMBEDDING_MODEL = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
-EMBEDDING_MODEL_NAME = os.getenv("EMBEDDING_MODEL_NAME", DEFAULT_EMBEDDING_MODEL)
-EMBEDDING_CACHE_PATH = _get_project_path(
-    "EMBEDDING_CACHE_PATH", PROJECT_ROOT / ".cache" / "fastembed"
-)
-FASTEMBED_THREADS = _get_int_env("FASTEMBED_THREADS", 2)
+DEFAULT_EMBEDDING_MODEL = "models/gemini-embedding-001"
+EMBEDDING_MODEL_NAME = os.getenv("GEMINI_EMBEDDING_MODEL", DEFAULT_EMBEDDING_MODEL)
+EMBEDDING_DIMENSIONS = _get_int_env("EMBEDDING_DIMENSIONS", 768)
 VECTORSTORE_PATH = _get_project_path(
     "VECTORSTORE_PATH", PROJECT_ROOT / "vectorstore" / "chroma_db"
 )
