@@ -1,6 +1,6 @@
 # 🩺 Medical RAG Assistant
 
-A multilingual medical information assistant built with **LangChain**, **ChromaDB**, **HuggingFace embeddings** and **Google Gemini**.
+A multilingual medical information assistant built with **LangChain**, **ChromaDB**, local **FastEmbed** embeddings and **Google Gemini**.
 Ask questions in **English, Telugu (script) or Telugu written in English letters (Tenglish)** and get answers grounded in medical PDFs (WHO manuals, clinical guidelines, first-aid manuals, drug lists). You can also upload a medical image (medicine strip, lab report) for a plain-language explanation.
 
 > ⚠️ **Disclaimer:** This project gives general medical information only. It is **not** a diagnosis or medical advice. Always consult a qualified doctor or pharmacist.
@@ -118,11 +118,49 @@ GEMINI_API_KEY=your_key_here
 Put your medical PDF files in `data/medical_pdfs/`.
 (PDFs are not included in this repository. Use freely available sources such as WHO publications, and respect each document's license.)
 
-**5. Build the vector database** (one time, takes a few minutes on CPU)
+**5. Build the vector database** (one-time local CPU embedding job)
 
 ```bash
 python src/vector_store.py
 ```
+
+The first run downloads the multilingual ONNX model. It is cached locally
+under `.cache/fastembed` by default. Embedding generation runs locally and does
+not use Gemini's embedding API quota. Gemini is still used to generate answers
+and analyze uploaded images.
+
+If a build is interrupted, continue it with:
+
+```bash
+python src/vector_store.py --resume
+```
+
+The vector database uses 384-dimensional vectors. The previous Gemini
+embedding database is incompatible and must be rebuilt once with
+`python src/vector_store.py`.
+
+### Render storage
+
+Render's filesystem is ephemeral unless the service has a persistent disk
+(available on paid services). For a Render service with a persistent disk:
+
+1. Attach a disk mounted at `/var/data`.
+2. Set `EMBEDDING_CACHE_PATH=/var/data/fastembed` and
+   `VECTORSTORE_PATH=/var/data/chroma_db` in the service environment.
+3. Keep the Render build command to dependency installation; do not build the
+   vector database in the build phase. After the app deploys, run
+   `python src/vector_store.py` from the service shell to create the index on
+   the mounted disk. The model download is cached there too, so it is not
+   downloaded again after restarts.
+4. Keep the disk attached for future deploys. Do not include `vectorstore/`
+   or `.cache/` in Git.
+
+The FastEmbed model download is approximately 220 MB; the 384-dimensional
+index is substantially smaller than an index built with 768-dimensional
+vectors. Leave room on the disk for the model cache, index metadata, and
+future growth. On deployments without persistent storage, the local model
+cache and vector index are lost after a restart or redeploy and must be
+downloaded/rebuilt again.
 
 **6. Start the backend** (terminal 1, from the project root)
 
@@ -150,7 +188,7 @@ Open http://localhost:8501. To point the Streamlit UI at another backend URL, se
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/health` | Server status and whether the RAG chain is loaded |
+| `GET` | `/health` | Server status and whether the RAG chain and vector store are available |
 | `POST` | `/ask` | JSON `{"question": "..."}` → `{"answer": "..."}` |
 | `POST` | `/analyze-image` | Multipart form: `image` (PNG/JPEG, max 5 MB) + optional `question` → `{"answer": "..."}` |
 
@@ -208,6 +246,9 @@ All main settings are in `src/config.py`:
 | `TOP_K_PER_QUERY` | 6 | Results fetched per expanded query |
 | `FINAL_TOP_K` | 6 | Chunks sent to Gemini |
 | `KEYWORD_WEIGHT`, `KEYWORD_CAP` | 0.01, 40 | Strength of keyword re-ranking |
+| `VECTORSTORE_PATH` | `vectorstore/chroma_db` | Chroma database directory; point to the Render disk |
+| `EMBEDDING_CACHE_PATH` | `.cache/fastembed` | Local model cache; point to the Render disk |
+| `EMBEDDING_MODEL_NAME` | `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` | FastEmbed multilingual ONNX model |
 
 If you change the embedding model or chunk settings, **rebuild the vector store** with `python src/vector_store.py`.
 
@@ -215,7 +256,7 @@ If you change the embedding model or chunk settings, **rebuild the vector store*
 
 ## 🧠 Design notes (what I learned)
 
-- **Chunk size must match the embedding model.** `paraphrase-multilingual-MiniLM-L12-v2` reads only the first 128 tokens, so 1000-character chunks were partly never embedded. Chunks are now ~500 characters.
+- **Chunk size must match the embedding model.** Keep configured chunks within the model's 128-token input limit to avoid truncating content during embedding.
 - **Distance vs keyword score scale.** Chroma returns a small distance; adding large raw keyword scores made keywords dominate the ranking. The keyword bonus is now capped and scaled.
 - **Bibliography pages pollute results.** Reference sections repeat topic words ("diabetes", "insulin") but contain no useful content, so they are penalised.
 - **Duplicate PDFs waste retrieval slots.** Duplicate files are removed and chunks are de-duplicated by content.
@@ -245,7 +286,7 @@ If you change the embedding model or chunk settings, **rebuild the vector store*
 
 ## 🛠️ Tech stack
 
-Python · FastAPI · LangChain · ChromaDB · sentence-transformers · Google Gemini · PyMuPDF · Streamlit · pytest
+Python · FastAPI · LangChain · ChromaDB · FastEmbed · ONNX Runtime · Google Gemini · PyMuPDF · Streamlit · pytest
 
 ---
 

@@ -36,8 +36,22 @@ def test_health_reports_not_ready_without_chain(monkeypatch):
     assert response.json() == {"status": "ok", "rag_ready": False}
 
 
-def test_ask_returns_answer(monkeypatch):
+def test_health_reports_not_ready_without_vectorstore(monkeypatch, tmp_path):
+    monkeypatch.setattr(api, "state", {"rag_chain": lambda question: "answer"})
+    monkeypatch.setattr(api, "VECTORSTORE_PATH", tmp_path / "missing")
+
+    response = client.get("/health")
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok", "rag_ready": False}
+
+
+def test_ask_returns_answer(monkeypatch, tmp_path):
     monkeypatch.setitem(api.state, "rag_chain", lambda q: f"answer to: {q}")
+    vectorstore_path = tmp_path / "vectorstore"
+    vectorstore_path.mkdir()
+    monkeypatch.setattr(api, "VECTORSTORE_PATH", vectorstore_path)
+
     response = client.post("/ask", json={"question": "What is diabetes?"})
     assert response.status_code == 200
     assert response.json() == {"answer": "answer to: What is diabetes?"}
@@ -53,6 +67,16 @@ def test_ask_503_when_chain_not_loaded(monkeypatch):
     monkeypatch.setattr(api, "state", {})
     response = client.post("/ask", json={"question": "What is diabetes?"})
     assert response.status_code == 503
+
+
+def test_ask_503_when_vectorstore_is_missing(monkeypatch, tmp_path):
+    monkeypatch.setitem(api.state, "rag_chain", lambda question: "answer")
+    monkeypatch.setattr(api, "VECTORSTORE_PATH", tmp_path / "missing")
+
+    response = client.post("/ask", json={"question": "What is diabetes?"})
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "Medical knowledge base is not built yet."
 
 
 def test_ask_500_when_chain_fails(monkeypatch):

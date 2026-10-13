@@ -23,6 +23,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from config import VECTORSTORE_PATH
 from gemini_llm import analyze_medical_image
 from rag_chain import create_rag_chain
 
@@ -44,9 +45,8 @@ state = {}
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Load embedding model, vector store and Gemini once.
-    # If something is missing (API key, vector store) the server
-    # fails fast here instead of failing on the first request.
+    # Initialize the Gemini chain. The local embedding model loads on the
+    # first retrieval, while the vector store is prepared separately.
     logger.info("Loading RAG chain...")
     state["rag_chain"] = create_rag_chain()
     logger.info("RAG chain ready.")
@@ -111,8 +111,9 @@ class HealthResponse(BaseModel):
 
 @app.get("/health", response_model=HealthResponse, tags=["system"])
 def health():
-    """Is the server up and is the RAG chain loaded?"""
-    return HealthResponse(status="ok", rag_ready="rag_chain" in state)
+    """Is the server up and is the knowledge base available?"""
+    rag_ready = "rag_chain" in state and VECTORSTORE_PATH.is_dir()
+    return HealthResponse(status="ok", rag_ready=rag_ready)
 
 
 @app.post("/ask", response_model=AnswerResponse, tags=["chat"])
@@ -129,6 +130,12 @@ def ask(request: AskRequest):
     if rag_chain is None:
         raise HTTPException(
             status_code=503, detail="RAG system is not ready yet."
+        )
+
+    if not VECTORSTORE_PATH.is_dir():
+        raise HTTPException(
+            status_code=503,
+            detail="Medical knowledge base is not built yet.",
         )
 
     try:

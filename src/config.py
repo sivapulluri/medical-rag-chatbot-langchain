@@ -13,7 +13,6 @@ SRC_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = SRC_DIR.parent
 
 PDF_FOLDER = PROJECT_ROOT / "data" / "medical_pdfs"
-VECTORSTORE_PATH = PROJECT_ROOT / "vectorstore" / "chroma_db"
 ENV_PATH = PROJECT_ROOT / ".env"
 
 # Load .env here so every setting below can read it.
@@ -32,23 +31,35 @@ def _get_int_env(name: str, default: int) -> int:
         raise ValueError(f"Environment variable {name!r} must be an integer.") from exc
 
 
-# -------------------------------------------------------------------
-# Embeddings: Gemini API (no local torch model, so very low RAM)
-# -------------------------------------------------------------------
-# NOTE: if you change the embedding model or its dimensions, you MUST
-# rebuild the vector store (python src/vector_store.py).
-DEFAULT_EMBEDDING_MODEL = "gemini-embedding-001"
-EMBEDDING_MODEL_NAME = os.getenv("GEMINI_EMBEDDING_MODEL", DEFAULT_EMBEDDING_MODEL)
-EMBEDDING_DIMENSIONS = _get_int_env("GEMINI_EMBEDDING_DIMENSIONS", 768)
+def _get_project_path(name: str, default: Path) -> Path:
+    """Resolve an environment path, anchoring relative paths at the project root."""
+    raw_value = os.getenv(name)
+    path = Path(raw_value).expanduser() if raw_value else default
+    if not path.is_absolute():
+        path = PROJECT_ROOT / path
+    return path.resolve()
 
-# Chunking (Gemini accepts up to 2048 tokens, so chunks can be bigger than
-# with an older local embedding model).
-CHUNK_SIZE = _get_int_env("CHUNK_SIZE", 1000)
-CHUNK_OVERLAP = _get_int_env("CHUNK_OVERLAP", 200)
 
-# Building the vector store (stay inside the free API quota).
+# -------------------------------------------------------------------
+# Local multilingual embeddings (FastEmbed / ONNX Runtime)
+# -------------------------------------------------------------------
+# Changing the embedding model requires rebuilding the vector store.
+DEFAULT_EMBEDDING_MODEL = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+EMBEDDING_MODEL_NAME = os.getenv("EMBEDDING_MODEL_NAME", DEFAULT_EMBEDDING_MODEL)
+EMBEDDING_CACHE_PATH = _get_project_path(
+    "EMBEDDING_CACHE_PATH", PROJECT_ROOT / ".cache" / "fastembed"
+)
+FASTEMBED_THREADS = _get_int_env("FASTEMBED_THREADS", 2)
+VECTORSTORE_PATH = _get_project_path(
+    "VECTORSTORE_PATH", PROJECT_ROOT / "vectorstore" / "chroma_db"
+)
+
+# Keep chunks within the embedding model's 128-token input limit.
+CHUNK_SIZE = _get_int_env("CHUNK_SIZE", 500)
+CHUNK_OVERLAP = _get_int_env("CHUNK_OVERLAP", 100)
+
+# Building the vector store.
 EMBED_BATCH_SIZE = _get_int_env("EMBED_BATCH_SIZE", 50)
-EMBED_SLEEP_SECONDS = float(os.getenv("EMBED_SLEEP_SECONDS", "1.0"))
 
 # Retrieval
 TOP_K_PER_QUERY = _get_int_env("TOP_K_PER_QUERY", 6)

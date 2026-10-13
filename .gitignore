@@ -13,10 +13,14 @@ env/
 __pycache__/
 *.py[cod]
 .pytest_cache/
+.cache/
 
 # --- Medical PDFs (large + license reasons) ---
 data/medical_pdfs/*.pdf
 data/duplicates/
+
+# --- Generated vector database ---
+vectorstore/
 
 # --- Local lock / temp files ---
 requirements-lock.txt
@@ -28,6 +32,3 @@ requirements-lock.txt
 .DS_Store
 Thumbs.db
 desktop.ini
-
-# NOTE: vectorstore/ is intentionally NOT ignored,
-# because Render needs the built Chroma database from the repo.

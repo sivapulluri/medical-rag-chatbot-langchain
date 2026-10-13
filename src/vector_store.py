@@ -8,22 +8,13 @@ import argparse
 import hashlib
 import shutil
 import sys
-import time
 
 from langchain_chroma import Chroma
 
-from config import EMBED_BATCH_SIZE, EMBED_SLEEP_SECONDS, VECTORSTORE_PATH
+from config import EMBED_BATCH_SIZE, VECTORSTORE_PATH
 from embeddings import get_embedding_model
 from pdf_loader import load_medical_pdfs
 from text_splitter import split_documents
-
-MAX_RETRIES = 6
-
-RETRYABLE_WORDS = (
-    "429", "quota", "rate limit", "resource_exhausted",
-    "resource exhausted", "503", "unavailable", "timed out",
-    "timeout", "deadline",
-)
 
 
 def chunk_id(chunk):
@@ -34,20 +25,6 @@ def chunk_id(chunk):
         f"{chunk.page_content}"
     )
     return hashlib.md5(key.encode("utf-8")).hexdigest()
-
-
-def add_with_retry(vector_store, batch, ids):
-    for attempt in range(1, MAX_RETRIES + 1):
-        try:
-            vector_store.add_documents(batch, ids=ids)
-            return
-        except Exception as e:
-            retryable = any(w in str(e).lower() for w in RETRYABLE_WORDS)
-            if not retryable or attempt == MAX_RETRIES:
-                raise
-            wait = min(15 * 2 ** (attempt - 1), 120)
-            print(f"  API limit/error (attempt {attempt}/{MAX_RETRIES}), waiting {wait}s...")
-            time.sleep(wait)
 
 
 def create_vector_store(resume=False):
@@ -104,11 +81,10 @@ def create_vector_store(resume=False):
             batch_ids = todo[start:start + EMBED_BATCH_SIZE]
             batch = [unique[i] for i in batch_ids]
 
-            add_with_retry(vector_store, batch, batch_ids)
+            vector_store.add_documents(batch, ids=batch_ids)
 
             stored += len(batch_ids)
             print(f"Stored {stored}/{total} chunks")
-            time.sleep(EMBED_SLEEP_SECONDS)
 
     except KeyboardInterrupt:
         print(f"\nStopped at {stored}/{total}. Continue with: python src/vector_store.py --resume")
@@ -116,7 +92,7 @@ def create_vector_store(resume=False):
 
     except Exception as e:
         print(f"\nStopped at {stored}/{total}: {e}")
-        print("If this is an API quota limit, wait and continue with: python src/vector_store.py --resume")
+        print("Fix the reported issue, then continue with: python src/vector_store.py --resume")
         sys.exit(1)
 
     print("ChromaDB vector store created successfully!")
